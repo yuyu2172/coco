@@ -594,7 +594,7 @@ class COCOeval:
         return figures_np
 
 
-    def analyze(self, save_to_dir=None):
+    def analyze(self, save_to_dir=None, names=None):
         '''
         Analyze errors
         Args:
@@ -626,11 +626,14 @@ class COCOeval:
         gt = self.cocoGt
         self.analyze_figures = {}
         for k, catId in enumerate(catIds):
-            nm = self.cocoGt.loadCats(catId)[0]
-            if 'supercategory' in nm:
-                nm = nm['supercategory'] + '-' + nm['name']
+            if names is not None:
+                nm = names[catId]
             else:
-                nm = nm['name']
+                nm = self.cocoGt.loadCats(catId)[0]
+                if 'supercategory' in nm:
+                    nm = nm['supercategory'] + '-' + nm['name']
+                else:
+                    nm = nm['name']
             print('Analyzing %s (%d):' %(nm, k))
             start_time = time.time()
 
@@ -638,20 +641,22 @@ class COCOeval:
             self.params.keepDtCatIds = [catId]
 
             # compute precision but ignore superclass confusion
-            cur_cat = gt.loadCats(catId)[0]
-            if 'supercategory' in cur_cat:
-                similar_cat_ids = gt.getCatIds(supNms=cur_cat['supercategory'])
-                self.params.keepGtCatIds = similar_cat_ids
-                self.params.targetCatId = catId
+            skip_super_category = True
+            # skip  superclass confusion evaluation
+            ps[3, :, k, :, :] = ps[2, :, k, :, :]
 
-                # computeIoU need real catIds, we need to recover it
-                self.params.catIds = catIds
-                self.evaluate()
-                self.accumulate()
-                ps[3, :, k, :, :] = self.eval['precision'][0, :, 0, :, :]
-            else:
-                # skip  superclass confusion evaluation
-                ps[3, :, k, :, :] = ps[2, :, k, :, :]
+            if not skip_super_category:
+                cur_cat = gt.loadCats(catId)[0]
+                if 'supercategory' in cur_cat:
+                    similar_cat_ids = gt.getCatIds(supNms=cur_cat['supercategory'])
+                    self.params.keepGtCatIds = similar_cat_ids
+                    self.params.targetCatId = catId
+
+                    # computeIoU need real catIds, we need to recover it
+                    self.params.catIds = catIds
+                    self.evaluate()
+                    self.accumulate()
+                    ps[3, :, k, :, :] = self.eval['precision'][0, :, 0, :, :]
 
             # compute precision but ignore any class confusion
             self.params.targetCatId = catId
